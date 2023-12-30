@@ -1,8 +1,2 @@
-/a.png
-/b.png
-/c.png
-/d.png
-/e.png
-/f.png
-/thing.png
+*.png
 /whiteout.py
