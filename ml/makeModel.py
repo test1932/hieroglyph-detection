@@ -10,7 +10,7 @@ def main(filename1, filename2):
     targets = np.array([line[0] for line in data])
     rest = [line[3:-1] for line in data]
     lines = np.array([list(map(int, line.split(","))) for line in rest])
-    model = MLPClassifier(hidden_layer_sizes=[200,200,200])
+    model = MLPClassifier(hidden_layer_sizes=[500,500,200])
     
     X_train, X_test, y_train, y_test = train_test_split(lines, targets)
     model.fit(lines, targets)

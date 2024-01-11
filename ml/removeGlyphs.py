@@ -13,9 +13,13 @@ from makeDataset import getCrop
 pygame.init()
 HEIGHT = 1000
 
-#87,113
+def display(fileName: str, chars: list):
+    """simple function for displaying bounds on an image.
 
-def display(fileName, lines, additionalCharacters):
+    Args:
+        fileName (str): path to image
+        chars (list): list of (poly,contours) pairs
+    """
     image = pygame.image.load(fileName)
     
     ratio = image.get_height() / HEIGHT
@@ -31,39 +35,36 @@ def display(fileName, lines, additionalCharacters):
                 running = False
         screen.blit(scaled,(0,0))
         
-        for i,line in enumerate(additionalCharacters):
+        for i,line in enumerate(chars):
             for shape,contours in line:
                 (x1,y1,x2,y2) = shape.bounds
                 pygame.draw.rect(screen,colours[i%len(colours)],(x1/ratio,y1/ratio,(x2-x1)//ratio + 1,(y2-y1)//ratio + 1), 2)
-                
-        for j,line in enumerate(lines):
-            for i, (shape, conts) in enumerate(line.shapes):
-                # print(len(line.weights), len(line.shapes))
-                if line.weights[i] not in [0.1,0.2,0.9,1]:
-                    continue
-                (x1,y1,x2,y2) = shape.bounds
-                pygame.draw.rect(screen,colours[j%len(colours)],(x1/ratio,y1/ratio,(x2-x1)//ratio + 1,(y2-y1)//ratio + 1))
-            pygame.draw.line(screen, (0,255,0), (line.edges[0] / ratio,line.bottom/ratio), (line.edges[1] / ratio,line.bottom/ratio))
-            if line.top == None:
-                continue
-            pygame.draw.line(screen, (255,0,0), (line.edges[0] / ratio,line.top/ratio), (line.edges[1] / ratio,line.top/ratio))
-        
         pygame.display.flip()
-        
-def var(things):
-    sigmaX = sum(things)
-    sumSquares = sum([x**2 for x in things])
-    return (sumSquares / len(things)) - (mean(things) ** 2)
 
-def mean(things):
+def mean(things: list):
+    """calculate mean value of iterable
+
+    Args:
+        things (list): list of numbers to calculate mean from
+
+    Returns:
+        float: mean value
+    """
     if len(things) == 0:
         return 0
     return sum(things) / len(things)
         
 def newGetLines(bounds):
+    """finds lines from list of character component bounds
+
+    Args:
+        bounds (list): list of character components
+
+    Returns:
+        list: list of lists of character components on each line
+    """
     bounds = sorted(bounds, key = lambda x: x[0].bounds[0])
     lines = []
-    edges = []
     i = 0
     j = 0
     while i < len(bounds):
@@ -96,10 +97,18 @@ def newGetLines(bounds):
             del bounds[i]
             
         lines.append(line)
-        edges.append((minX,maxX))
-    return lines, edges
+    return lines
 
 def isSequential(line1, line2):
+    """checks whether one line is the continuation of another.
+
+    Args:
+        line1 (list): x1,x2 pair 1
+        line2 (list): x1,x2 pair 2
+
+    Returns:
+        bool: whether one line is after the other (within error)
+    """
     if not (line1[0] > line2[1] or line2[0] > line1[1]):
         return False
     if min(abs(line1[0] - line2[1]), abs(line1[1] - line2[0])) < 50:
@@ -107,6 +116,16 @@ def isSequential(line1, line2):
     return False
 
 def getXrange(minX, maxX, line):
+    """get all bounds from line between minX and maxX
+
+    Args:
+        minX (float): minimum x of range
+        maxX (float): maximum x of range
+        line (list): list of bounds to search through
+
+    Returns:
+        tuple: list of bounds in the range, last index of success
+    """
     things = []
     lastI = 0
     for i, (char, contours) in enumerate(line):
@@ -116,6 +135,15 @@ def getXrange(minX, maxX, line):
     return things, lastI
 
 def combines(line1, line2):
+    """check whether two lines can be combined (are the same line)
+
+    Args:
+        line1 (list): first line to check if combines
+        line2 (list): second line to check if combines
+
+    Returns:
+        bool: _description_
+    """
     if len(line1) * len(line2) == 0:
         return True
     
@@ -167,6 +195,11 @@ def combines(line1, line2):
     return count > 0.5 * len(secondLine)# or (after and maxY and minY and max(maxY, c[3]) - min(c[1], minY) < 40)
 
 def combineLines(lines):
+    """combine parts of the same line.
+
+    Args:
+        lines (list): list of lines (lists of bounds)
+    """
     i = 0
     while i < len(lines):
         j = 0
@@ -189,8 +222,12 @@ def combineLines(lines):
             j += 1
         i += 1
         
-def newCombineOnLine(shapes):
-    # shapes is list of (polygon, [contours]) pairs
+def newCombineOnLine(shapes:list):
+    """combine components of characters in a list
+
+    Args:
+        shapes (list): list of (polygon, [contours]) pairs to combine
+    """
     i = 0
     while i < len(shapes):
         j = 0
@@ -213,34 +250,20 @@ def newCombineOnLine(shapes):
         i += 1
 
 def trace(val):
+    # haskellian debug
     print(val)
     return val
 
 def isMap(shapes):
+    # checks if an image likely contains a map
     for shape in shapes:
         if shape.bounds[3] - shape.bounds[1] > 100:
             return True
     return False
 
 def filterNonsenseBounds(shapes):
+    # remove bounds that are too large from image
     return list(filter(lambda x:x.bounds[3] - x.bounds[1] < 50, shapes))
-        
-def removeWithModel(lines, image, bracketModelFname, label):
-    file = open(bracketModelFname, "rb")
-    model = pickle.load(file)
-    file.close()
-    newLines = []
-    removed = []
-    
-    for line in lines:
-        modelInputs = np.array([getCrop(image, line[i][0].bounds, line[i][1], move = True).flatten()\
-            for i in range(len(line))])
-        res = model.predict(modelInputs)
-        removedChars = [line[i] for i in range(len(line)) if res[i] == label]
-        new = [line[i] for i in range(len(line)) if res[i] != label]
-        newLines.append(new)
-        removed.append(removedChars)
-    return newLines, removed
 
 def containsLongThingHorizontal(contours):
     for contour in contours:
@@ -250,6 +273,16 @@ def containsLongThingHorizontal(contours):
     return False
 
 def combineHieros(stages, shapes):
+    """combine possible hieroglyphs that are adjacent
+
+    Args:
+        stages (list): list of float stages representing processing stages of 
+            whether each character is a hieroglyph
+        shapes (list): list of bounds and contours of each character
+
+    Returns:
+        bool: whether any changes have been made to stages
+    """
     changes = False
     for i in range(len(stages)):
         next = stages[i + 1] if i != len(stages) - 1 else 0
@@ -270,6 +303,12 @@ def combineHieros(stages, shapes):
     return changes
 
 def removeLongChains(stages):
+    """remove long chains of 0.1 and 0.2 stages occurring from errors.
+
+    Args:
+        stages (list): list of float stages representing processing stages of 
+            whether each character is a hieroglyph
+    """
     if len(stages) < 3:
         return
     start = 0
@@ -283,7 +322,18 @@ def removeLongChains(stages):
         start += 1
         end += 1
 
-def expandHieroBlock(shapes, stages, isBrackets):
+def expandHieroBlock(shapes:list, stages:list, isBrackets:list):
+    """turn characters immediately next to, and close to, hieroglyphs into likely hieros
+
+    Args:
+        shapes (list): list of bounds of characters
+        stages (list): list of float stages representing processing stages of 
+            whether each character is a hieroglyph
+        isBrackets (list): list of 1s and 0s representing whether each character is likely a bracket
+
+    Returns:
+        bool: whether any changes have been made to stages
+    """
     copy = stages[:]
     
     changes = True
@@ -313,7 +363,15 @@ def expandHieroBlock(shapes, stages, isBrackets):
     removeLongChains(stages)
     return stages != copy
 
-def handleIsolated(line, stages, isBrackets):
+def handleIsolated(line:list, stages:list, isBrackets:list):
+    """handle isolated likely hieroglyphs
+
+    Args:
+        line (list): list of shapes on the line
+        stages (list): list of float stages representing processing stages of 
+            whether each character is a hieroglyph
+        isBrackets (list): list of 1s and 0s representing whether each character is likely a bracket
+    """
     for i in range(len(stages)):
         if stages[i] != 0.9:
             continue
@@ -329,24 +387,29 @@ def handleIsolated(line, stages, isBrackets):
         distancePrev = 50 if i == 0 else line[i][0].distance(line[i - 1][0])
         if i == 0:
             next = stages[i + 1]
-            if distanceNext > 8 or next != 0 or isBrackets[i + 1] or \
-                    line[i + 1][0].bounds[3] - line[i + 1][0].bounds[1] < 10:
+            if (distanceNext > 8 or next != 0 or isBrackets[i + 1] or \
+                    line[i + 1][0].bounds[3] - line[i + 1][0].bounds[1] < 10) and not isBrackets[i]:
                 stages[i] = 1
             continue
         if i == len(stages) - 1:
             prev = stages[i - 1]
-            if distancePrev > 8 or prev != 0 or isBrackets[i - 1]:
+            if (distancePrev > 8 or prev != 0 or isBrackets[i - 1]) and not isBrackets[i]:
                 stages[i] = 1
             continue
         next,prev = stages[i + 1], stages[i - 1]
-        if (distancePrev > 8 or prev != 0 or isBrackets[i - 1]) and \
+        if ((distancePrev > 8 or prev != 0 or isBrackets[i - 1]) and \
                 (distanceNext > 8 or next != 0 or isBrackets[i + 1] or\
-                line[i + 1][0].bounds[3] - line[i + 1][0].bounds[1] < 10):
+                line[i + 1][0].bounds[3] - line[i + 1][0].bounds[1] < 10)) and not isBrackets[i]:
             stages[i] = 1
             continue
         stages[i] = 0.5
         
-def fillGaps(stages):
+def fillGaps(stages:list):
+    """fill in characters in between two hieroglyphs as hieros
+
+    Args:
+        stages (list): list of shapes
+    """
     for i in range(1,len(stages)-1):
         prev = stages[i - 1]
         next = stages[i + 1]
@@ -356,6 +419,17 @@ def fillGaps(stages):
             stages[i + 1] = 1
 
 def getHieros(line, bracketModelFname, hieroModelFname, image):
+    """find the hieroglyphs in a line
+
+    Args:
+        line (list): list of bounds
+        bracketModelFname (str): path to bracket detection model
+        hieroModelFname (str): path to hiero detection model
+        image (np.array): opencv image to find hieros in
+
+    Returns:
+        list: list of bounds of hieros on line
+    """
     # 0   = not a hieroglyph                        - not a hieroglyph if not removed
     # 0.1 = got chained from a 0                    - hieroglyph if not removed
     # 0.2 = got chained from a 0.5                  - hieroglyph if not removed
@@ -391,8 +465,8 @@ def getHieros(line, bracketModelFname, hieroModelFname, image):
                 stages[i] = 0.9 if not isBrackets[i] else 0.5
             else:
                 stages[i] = 0.5 if not isBrackets[i] else 0
-        elif containsLongThingHorizontal(contours):
-            stages[i] = 0.9
+        # elif containsLongThingHorizontal(contours):
+        #     stages[i] = 0.9
         elif isHieros[i] and not isBrackets[i]:
             stages[i] = 0.5
         else:
@@ -409,18 +483,35 @@ def getHieros(line, bracketModelFname, hieroModelFname, image):
     
     return [line[i] for i in range(len(line)) if stages[i] in [0.1,0.2,1]]
 
-def removeSmallHieros(line):
+def removeSmallHieros(line:list):
+    """remove small hieros (likely punctuation)
+
+    Args:
+        line (list): list of hieros on the line
+
+    Returns:
+        list: list of hieros with small bounds removed
+    """
     return list(filter(lambda x:(x[0].bounds[3] - x[0].bounds[1]) *\
         (x[0].bounds[2] - x[0].bounds[0]) > 50, line))
     
+# deprecated, but might be repurposed
 def contourWhiteOut(image, hieros):
     colour = (255,255,255)
     for i,(_, contours) in enumerate(hieros):
         cv2.drawContours(image, contours, -1, color = colour, thickness = cv2.FILLED)
-        cv2.drawContours(image, contours, -1, color = colour, thickness = 3)  
+        cv2.drawContours(image, contours, -1, color = colour, thickness = 3) 
     cv2.imwrite("outthing.png", image)
 
 def multiPolyToPoly(multiPoly):
+    """turns a multipolygon into a polygon
+
+    Args:
+        multiPoly (shapely.Multipolygon): polygon of polygons
+
+    Returns:
+        shapely.Polygon: polygon of the bounds
+    """
     polys = list(map(lambda x: x.bounds,multiPoly.geoms))
     if len(polys) == 0:
         return None
@@ -430,30 +521,43 @@ def multiPolyToPoly(multiPoly):
     y2 = max(polys, key = lambda x: x[3])[3]
     return shapely.Polygon([(x1,y1),(x1,y2),(x2,y2),(x2,y1)])
 
-def blockWhiteOut(image, hieros):
+def blockWhiteOut(image, hieros, imageName):
+    """used to remove hieroglyphs in an image
+
+    Args:
+        image (np.array): opencv image to use
+        hieros (list): list of hieroglyphs to remove
+        imageName (str): id of image
+    """
     colour = (255,255,255)
+    print(imageName)
     for i,(poly,_) in enumerate(hieros):
         if type(poly) == shapely.MultiPolygon:
             poly = multiPolyToPoly(poly)
             if poly == None:
                 continue
+        x1,y1,x2,y2 = poly.bounds
+        cv2.imwrite(f"out/{imageName}-{int(x1)}-{int(y1)}-{int(x2)}-{int(y2)}.png", \
+                    image[int(y1):int(y2),int(x1):int(x2)])
         bounds = np.array(list(map(list,poly.exterior.coords))[1:], np.int32).reshape((-1,1,2))
         cv2.polylines(image, [bounds], isClosed = True, color = colour, thickness = 3)
         cv2.fillPoly(image, [bounds], color = colour)
     cv2.imwrite("outthing.png", image)
 
-def main(fileName, bracketModelFname, hieroFname):
+# main function
+def main(fileName, bracketModelFname, hieroFname, fname):
     print(f'now analysing {fileName}')
     image, colour, contours = getImage(fileName)
     imageCopy = np.copy(image)
     bounds = list(map(boundingBox, contours))
     
     if isMap(bounds):
-        display(fileName, [], [])
+        display(fileName, [])
+        blockWhiteOut(colour, [], fname)
         return
     
     bounds = filterNonsenseBounds(bounds)
-    lines, edges = newGetLines(list(zip(bounds, contours)))
+    lines = newGetLines(list(zip(bounds, contours)))
     lines.sort(key = lambda x:min(map(lambda y: y[0].bounds[1],x)))
     
     combineLines(lines)
@@ -461,16 +565,13 @@ def main(fileName, bracketModelFname, hieroFname):
     lines = [getHieros(line, bracketModelFname, hieroFname, image) for line in lines]
     lines = list(map(removeSmallHieros, lines))
     
-    blockWhiteOut(colour, [j for row in lines for j in row])
-    
-    additional = lines
-    lines = []
-    display(fileName, lines, additional)
+    blockWhiteOut(colour, [j for row in lines for j in row], fname)
+    display(fileName, lines)
 
 if __name__ == '__main__':
     if sys.argv[1] == 'd':
         count = int(sys.argv[3])
         for fileName in os.listdir(sys.argv[2])[count - 1:]:
-            main(f'{sys.argv[2]}\\{fileName}', sys.argv[4], sys.argv[5])
+            main(f'{sys.argv[2]}\\{fileName}', sys.argv[4], sys.argv[5], fileName)
     else:
-        main(sys.argv[1], sys.argv[2], sys.argv[3])
+        main(sys.argv[1], sys.argv[2], sys.argv[3], 0)
