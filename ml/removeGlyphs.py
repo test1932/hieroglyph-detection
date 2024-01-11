@@ -461,7 +461,7 @@ def getHieros(line, bracketModelFname, hieroModelFname, image):
         elif height > 30:
             if width > 40:
                 stages[i] = 1
-            if width > 10 or isHieros[i]:
+            elif width > 10 or isHieros[i]:
                 stages[i] = 0.9 if not isBrackets[i] else 0.5
             else:
                 stages[i] = 0.5 if not isBrackets[i] else 0
@@ -480,7 +480,6 @@ def getHieros(line, bracketModelFname, hieroModelFname, image):
         changes = combineHieros(stages, line)
         changes = expandHieroBlock(line, stages, isBrackets) or changes
         fillGaps(stages)
-    
     return [line[i] for i in range(len(line)) if stages[i] in [0.1,0.2,1]]
 
 def removeSmallHieros(line:list):

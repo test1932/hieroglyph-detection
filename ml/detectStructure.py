@@ -398,7 +398,7 @@ def toLines(bounds, lines):
 def doesCombine(first, second):
     smaller, larger = (first, second) if first[2] - first[0] < \
         second[2] - second[0] else (second, first)
-    return larger[0] - 5 < (smaller[0] + smaller[2]) / 2 < larger[2] + 5
+    return larger[0] < (smaller[0] + smaller[2]) / 2 < larger[2]
 
 def combineOnLine(line):
     i = 0
