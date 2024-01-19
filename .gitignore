@@ -1,2 +1,4 @@
 *.png
 venv
+ml/data/*
+ml/out/*

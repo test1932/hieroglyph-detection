@@ -347,10 +347,10 @@ def expandHieroBlock(shapes:list, stages:list, isBrackets:list):
             distanceToPrev = shapes[i][0].distance(shapes[i - 1][0]) if prev != 0 else 50
             
             if stages[i] == 0:
-                if next in [0.1, 0.2, 0.9, 1] and distanceToNext < 8 and not isBrackets[i]:
+                if next in [0.1, 0.2, 0.9, 1] and distanceToNext < 5 and not isBrackets[i]:
                     stages[i] = 0.1
                     changes = True
-                elif prev in [0.1, 0.2, 0.9, 1] and distanceToPrev < 8 and not isBrackets[i]:
+                elif prev in [0.1, 0.2, 0.9, 1] and distanceToPrev < 5 and not isBrackets[i]:
                     stages[i] = 0.1
                     changes = True
             elif stages[i] == 0.5:
@@ -465,8 +465,6 @@ def getHieros(line, bracketModelFname, hieroModelFname, image):
                 stages[i] = 0.9 if not isBrackets[i] else 0.5
             else:
                 stages[i] = 0.5 if not isBrackets[i] else 0
-        # elif containsLongThingHorizontal(contours):
-        #     stages[i] = 0.9
         elif isHieros[i] and not isBrackets[i]:
             stages[i] = 0.5
         else:
@@ -480,19 +478,15 @@ def getHieros(line, bracketModelFname, hieroModelFname, image):
         changes = combineHieros(stages, line)
         changes = expandHieroBlock(line, stages, isBrackets) or changes
         fillGaps(stages)
-    return [line[i] for i in range(len(line)) if stages[i] in [0.1,0.2,1]]
+    return [i for i in range(len(line)) if stages[i] in [0.1,0.2,1]]
 
-def removeSmallHieros(line:list):
-    """remove small hieros (likely punctuation)
-
-    Args:
-        line (list): list of hieros on the line
-
-    Returns:
-        list: list of hieros with small bounds removed
-    """
-    return list(filter(lambda x:(x[0].bounds[3] - x[0].bounds[1]) *\
-        (x[0].bounds[2] - x[0].bounds[0]) > 50, line))
+def removeSmallHieros(indexes, j, bounds):
+    newIndexes = []
+    for i in indexes:
+        x = bounds[j][i]
+        if (x[0].bounds[3] - x[0].bounds[1]) * (x[0].bounds[2] - x[0].bounds[0]) > 50:
+            newIndexes.append(i)
+    return newIndexes
     
 # deprecated, but might be repurposed
 def contourWhiteOut(image, hieros):
@@ -542,6 +536,22 @@ def blockWhiteOut(image, hieros, imageName):
         cv2.polylines(image, [bounds], isClosed = True, color = colour, thickness = 3)
         cv2.fillPoly(image, [bounds], color = colour)
     cv2.imwrite("outthing.png", image)
+    
+def writeToFile(fileName, bounds, lines, hieros):
+    file = open(f'{os.getcwd()}\\data\\{fileName}', "w")
+    file.write(";".join(list(map(lambda x: f'{x[0]},{x[1]}', hieros))) + "\n\n")
+    for poly in bounds:
+        bound = poly.bounds
+        file.write(f"{bound[0]},{bound[1]},{bound[2]},{bound[3]}\n")
+    file.write("\n")
+    
+    for line in lines:
+        strLine = []
+        for poly,contours in line:
+            strLine.append(f'{poly.bounds[0]},{poly.bounds[1]},{poly.bounds[2]},{poly.bounds[3]}')
+        strLine = ";".join(strLine) + "\n"
+        file.write(strLine)
+    file.close()
 
 # main function
 def main(fileName, bracketModelFname, hieroFname, fname):
@@ -551,8 +561,9 @@ def main(fileName, bracketModelFname, hieroFname, fname):
     bounds = list(map(boundingBox, contours))
     
     if isMap(bounds):
-        display(fileName, [])
-        blockWhiteOut(colour, [], fname)
+        # display(fileName, [])
+        # blockWhiteOut(colour, [], fname)
+        writeToFile(f"{fname}.txt",[],[],[])
         return
     
     bounds = filterNonsenseBounds(bounds)
@@ -561,11 +572,15 @@ def main(fileName, bracketModelFname, hieroFname, fname):
     
     combineLines(lines)
     mutatingMap(newCombineOnLine, lines)
-    lines = [getHieros(line, bracketModelFname, hieroFname, image) for line in lines]
-    lines = list(map(removeSmallHieros, lines))
+    hieros = [getHieros(line, bracketModelFname, hieroFname, image) for line in lines]
+    for i in range(len(hieros)):
+        hieros[i] = removeSmallHieros(hieros[i], i, lines)
+        
+    hierosFlat = [(i,j) for i,line in enumerate(hieros) for j in line]
+    writeToFile(f"{fname}.txt", bounds, lines, hierosFlat)
     
-    blockWhiteOut(colour, [j for row in lines for j in row], fname)
-    display(fileName, lines)
+    # blockWhiteOut(colour, [j for row in lines for j in row], fname)
+    # display(fileName, lines)
 
 if __name__ == '__main__':
     if sys.argv[1] == 'd':
