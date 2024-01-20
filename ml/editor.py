@@ -274,9 +274,6 @@ class application:
         return selectedLine, selectedBound, found
 
     def handleCombineBounds(self, mousePos):
-        if mousePos[0] > 650:
-            return None
-        
         selectedLine, selectedBound, found = self.getSelected(mousePos)
         
         if (selectedLine, selectedBound) == self.selection or not found:
@@ -310,9 +307,6 @@ class application:
         return (selectedLine, selectedBound)
 
     def handleRemoveHieros(self, mousePos):
-        if mousePos[0] > 650:
-            return False
-        
         selectedLine, selectedBound, found = self.getSelected(mousePos)
         
         if not found:
@@ -327,9 +321,6 @@ class application:
             return True
         
     def handleAddHieros(self, mousePos):
-        if mousePos[0] > 650:
-            return False
-        
         selectedLine, selectedBound, found = self.getSelected(mousePos)
         
         if not found:
@@ -339,9 +330,6 @@ class application:
         return True
     
     def handleMoveCharacter(self, mousePos):
-        if mousePos[0] > 650:
-            return None
-        
         selectedLine, selectedBound, found = self.getSelected(mousePos)
         
         if not found:
@@ -372,9 +360,6 @@ class application:
         return None
 
     def handleCombineLines(self, mousePos):
-        if mousePos[0] > 650:
-            return None, self.hierosLineIndexes
-        
         selected, _, found = self.getSelected(mousePos)
         if selected == self.selection or not found:
             return None, self.hierosLineIndexes
@@ -413,9 +398,6 @@ class application:
         return selected, self.hierosLineIndexes
 
     def handleFreehand(self, mousePos):
-        if mousePos[0] > 650:
-            return None
-        
         newRect = [min(self.selection[0], mousePos[0]), min(self.selection[1], mousePos[1]), \
             max(self.selection[0], mousePos[0]), max(self.selection[1], mousePos[1])]
         self.newBounds.append(list(map(lambda x: x * self.baseScale / self.scale, newRect)))
