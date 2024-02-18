@@ -1,7 +1,7 @@
 # Hieroglyph Removal Tool
 
 ## description:
-This repo is a series of tools for automatically removing hieroglyphs from TopBib volumes.
+This repo is a series of tools for automatically removing hieroglyphs from TopBib volumes and formatting the output to HTML.
 
 ## usage:
 Note: this tool uses Pickle files to serialize machine learning models. These are created by makeModel.py:
@@ -15,3 +15,7 @@ These models are then used to assist classification and removal of hieroglyphs v
 To create a dataset or add additional data, the tool 'makeDataset.py' can be used. This tool uses an older approach to character detection and should be updated soon, hopefully. It can be run via:
 
     python makeDataset.py <image folder path> <dataset path> <min page number> <max page number>
+
+## converting to HTML:
+
+    python toHTML/toHTML.py <path to Azure JSON output> <output file path>
