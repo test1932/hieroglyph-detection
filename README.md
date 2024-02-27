@@ -18,4 +18,4 @@ To create a dataset or add additional data, the tool 'makeDataset.py' can be use
 
 ## converting to HTML:
 
-    python toHTML/toHTML.py <path to Azure JSON output> <output file path>
+    python toHTML/toHTML.py <path to Azure JSON output> <output file path> <path to editor.py hieroglyph bounds output>

@@ -131,15 +131,21 @@ class application:
         return zoom
     
     def writeChanges(self):
+        #TODO write to correct place
         colour = (255,255,255)
         hieros = [self.lines[lineNo][charNo] for lineNo,charNo in self.hierosLineIndexes] + self.newBounds
+        boundsFile = open(f'out/{self.idName}_bounds.txt',"w")
+        
         for x1,y1,x2,y2 in hieros:
             cv2.imwrite(f"out/{self.imageFname}-{int(x1)}-{int(y1)}-{int(x2)}-{int(y2)}.png", \
                         self.colour[int(y1):int(y2),int(x1):int(x2)])
             points = np.array([[x1,y1],[x1,y2],[x2,y2],[x2,y1]], np.int32)
             cv2.polylines(self.colour, [points], isClosed = True, color = colour, thickness = 3)
             cv2.fillPoly(self.colour, [points], color = colour)
+            boundsFile.write(f'{x1},{y1},{x2},{y2}\n')
+        
         cv2.imwrite("outthing.png", self.colour)
+        boundsFile.close()
     
     def createSetMode(self, mode):
         def onclick():
