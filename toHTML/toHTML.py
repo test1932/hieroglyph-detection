@@ -41,7 +41,17 @@ def isSimpleRomanNumeral(text):
 
 # predicate for checking if a word is likely to be initials
 def isInitials(text):
-    return '.' in text[1:-1]
+    wasLastDot = True
+    for char in text:
+        if char == '.':
+            if wasLastDot:
+                return False
+            wasLastDot = True
+        else:
+            if not wasLastDot:
+                return False
+            wasLastDot = False
+    return True
 
 # checks if a paragraph is a heading
 def isParaCentred(para, minX, maxX):
@@ -65,53 +75,54 @@ def isNumber(para):
 # adds structural paragraph and heading tags to the list of tags as required
 def addParagraphs(paragraphs, lines, tags, minX, maxX):
     for para in paragraphs:
-        tag = ('<p>&nbsp&nbsp&nbsp&nbsp','</p>')
+        tag = ('<p>','</p>')
         paraBounds = para['boundingRegions'][0]['polygon']
         if isParaCentred(para, minX,maxX):
-            tag = ('<h2>','</h2>')
+            tag = ('<h1>','</h1>')
         elif isNumber(para) and abs((paraBounds[0] - minX) - (maxX - paraBounds[2])) > (maxX - minX) / 2:
-            floatClass = 'leftblock' if paraBounds[0] - minX > maxX - paraBounds[2] else 'rightblock'
+            floatClass = 'leftblock' if paraBounds[0] - minX < maxX - paraBounds[2] else 'rightblock'
             tag = (f'<div class="{floatClass}">','</div>')
-        tags.append((f'{tag[0]}',para['spans'][0]['offset']))
-        tags.append((f'{tag[1]}',para['spans'][0]['offset'] + para['spans'][0]['length']))
+            
+        offset, length = para['spans'][0]['offset'], para['spans'][0]['length']
+        tags.append((tag[0],tag[1],offset,offset+length))
 
 # adds like breaks at the end of each line
-def addLineBreaks(lines, tags):
+def addLineBreaks(lines, tags, singleTags):
     for line in lines:
         breakPos = line['spans'][0]['offset'] + line['spans'][0]['length']
         endPara = False
         for tag in tags:
-            if tag[0] in {"</p>","</h2>"} and tag[1] == breakPos:
+            if tag[1] in {"</p>", "</h1>"} and tag[3] == breakPos:
                 endPara = True
                 break
         if not endPara:
-            tags.append(('<br/>',breakPos))
+            singleTags.append(('','<br/>',breakPos,breakPos))
 
 # add tags into flat text
 def tagsAndTextToHTML(text, tags):
-    tags.sort(key=lambda x:x[1])
-    htmlStr = ""
+    htmlStr = text[:tags[0][1]] if tags else text
     for i,tag in enumerate(tags):
         if i < len(tags) - 1:
-            htmlStr = htmlStr + tag[0] + text[tag[1]:tags[i + 1][1]]
+            htmlStr += tag[0] + text[tag[1]:tags[i + 1][1]]
             continue
-        htmlStr = htmlStr + tag[0] + text[tag[1]:]
-        
+        htmlStr += tag[0] + text[tag[1]:]
     return htmlStr
 
 # add tags for smallCaps
-def addSmallCapsStyle(allText, words, tags):
+def addSmallCapsStyle(allText, words, smallUpperTags):
     allCaps = []
     for word in words:
-        if word['content'].isupper() and len(word['content']) >= 2:
-            tags.append(("<span class='smallUpper'>",word['span']['offset']))
-            tags.append(("</span>",word['span']['offset'] + word['span']['length']))
-            allCaps.append((word['span']['offset'], word['span']['offset'] + word['span']['length']))
+        shouldBeSmallCaps = not (isSimpleRomanNumeral(word['content']) or isInitials(word['content']))
+        onlyAlpha = list(filter(lambda x: x.isalpha(),word['content']))
+        if word['content'].isupper() and len(onlyAlpha) >= 2 and shouldBeSmallCaps:
+            offset, length = word['span']['offset'], word['span']['length']
+            smallUpperTags.append(('<span class="smallUpper">', '</span>', offset, offset + length))
+            allCaps.append((offset, offset + length))
 
     partStr = allText[:allCaps[0][0]] if allCaps else allText
     for i in range(len(allCaps)):
-        text = allText[allCaps[i][0]:allCaps[i][1]]
-        partStr += text if isSimpleRomanNumeral(text) or isInitials(text) else text[0] + text[1:].lower()
+        text = allText[allCaps[i][0]:allCaps[i][1]] 
+        partStr += text[0] + text[1:].lower()
         
         if i == len(allCaps) - 1:
             partStr += allText[allCaps[i][1]:]
@@ -140,8 +151,7 @@ def addItalics(styles, tags):
         prop = list(set(style.keys()).difference(ignoreKeys))[0]
         if style[prop] == 'italic' and prop == 'fontStyle':
             for span in style['spans']:
-                tags.append((f'<i>', span['offset']))
-                tags.append((f'</i>', span['offset'] + span['length']))
+                tags.append(('<i>', '</i>', span['offset'], span['offset'] + span['length']))
 
 # get line with top closest to the specified value, O(log(n))
 def closestLine(lines, target):
@@ -219,25 +229,59 @@ def removeHieros(flatText, words, lines, hierosBounds):
             partStr += flatText[offset + length:wordsToRemove[i + 1]['span']['offset']]
     return partStr
 
+def toHTMLtags(tags):
+    tags.sort(key = lambda x: x[2])
+    HTMLtags = []
+    openTags = []
+    inItalics = False
+    for openTag, closeTag, startPos, endPos in tags:
+        # can't have small caps in italics
+        if "smallUpper" in openTag and inItalics:
+            continue
+        if openTag == '<i>':
+            inItalics = True
+            
+        toRemoveIndexes = []
+        for i, (_, openedClosingTag, _, openClosingPos) in enumerate(openTags[::-1]):
+            if openClosingPos <= startPos:
+                toRemoveIndexes.append(len(openTags) - 1 - i)
+                HTMLtags.append((openedClosingTag, openClosingPos))
+                if openedClosingTag == '</i>':
+                    inItalics = False
+        for i in toRemoveIndexes:
+            del openTags[i]
+        HTMLtags.append((openTag, startPos))
+        openTags.append((openTag, closeTag, startPos, endPos))
+        
+    for _, closingTag, _, endPos in openTags[::-1]:
+        HTMLtags.append((closingTag, endPos))
+    
+    print(HTMLtags)
+    print()
+    return HTMLtags
+
 # turn azure output into HTML
 def wordsToHTML(paragraphs, lines, words, styles, page, hierosBounds):
     tags = []
+    singleTags = []
     styleBlocks = [
         '.smallUpper {font-variant:small-caps;}',
         '.leftblock {float:left;}',
         '.rightblock {float:right;}',
-        'h2 {text-align: center;font-size: 18px;font-weight: normal;}'
+        'h1 {text-align: center;font-size: 18px;font-weight: normal;}',
+        'p {text-indent: 30px}'
     ]
 
     minX, maxX = getParasExtremes(paragraphs, page)
     addParagraphs(paragraphs, lines, tags, minX, maxX)
-    addLineBreaks(lines, tags)
+    addLineBreaks(lines, tags, singleTags)
     addItalics(styles,tags)
     
     flatStr = removeHieros("\n".join([para['content'] for para in paragraphs]), words, lines, hierosBounds)
     flatStr = addSmallCapsStyle(flatStr, words, tags)
     
-    bodyHTML = f'<div style="display:flex;justify-content: center;";><div">{tagsAndTextToHTML(flatStr, tags)}</div></div>'
+    HTMLtags = toHTMLtags(tags + singleTags)
+    bodyHTML = f'<div style="display:flex;justify-content: center;";><div">{tagsAndTextToHTML(flatStr, HTMLtags)}</div></div>'
     styleBlock = "\n".join(styleBlocks)
     
     return f'<html>\n<head>\n<style>\n{styleBlock}\n</style>\n</head>\n<body>\n{bodyHTML}\n</body>\n</html>'
